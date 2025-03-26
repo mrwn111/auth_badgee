@@ -12,6 +12,7 @@ const char *ssid = "WifiCadeau";
 const char *motDePasseWifi = "CadeauWifi";
 
 void setup() {
+  delay(1000);
   Serial.begin(115200);
   Serial.println("Connexion au réseau WiFi en cours");
   WiFi.begin(ssid, motDePasseWifi);
