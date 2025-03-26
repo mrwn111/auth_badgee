@@ -22,18 +22,18 @@ void loop() {
     if (mfrc522.PICC_ReadCardSerial()) {
       Serial.println("Test 2 passé");
       Serial.println("Nouveau Tag RFID :");
-      Serial.print("RFID Tag :");
+      Serial.print("RFID Tag (Decimal):");
 
       for (byte i = 0; i < mfrc522.uid.size; i++) {
-        Serial.print(mfrc522.uid.uidByte[i] < 0x10 ? " 0" : " ");
-        Serial.print(mfrc522.uid.uidByte[i], HEX);
+        Serial.print(mfrc522.uid.uidByte[i], DEC);  
+        Serial.print(" ");
       }
-      Serial.println();
+      Serial.println(); 
 
       mfrc522.PICC_HaltA();
       mfrc522.PCD_StopCrypto1();
       delay(300);
     }
   }
-  delay(1000);
+  delay(1000); 
 }
