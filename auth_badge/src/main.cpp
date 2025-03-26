@@ -1,18 +1,39 @@
 #include <Arduino.h>
+#include <SPI.h>
+#include <MFRC522.h>
 
-// put function declarations here:
-int myFunction(int, int);
+#define RST_PIN 5
+#define SS_PIN 6
+
+MFRC522 mfrc522(SS_PIN, RST_PIN); 
 
 void setup() {
-  // put your setup code here, to run once:
-  int result = myFunction(2, 3);
+  Serial.begin(115200); 
+  SPI.begin(); 
+
+  mfrc522.PCD_Init(); 
+
+  Serial.println("Place une carte sur le RFID");
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
-}
+  if (mfrc522.PICC_IsNewCardPresent()) {
+    Serial.println("Test 1 passé");
+    if (mfrc522.PICC_ReadCardSerial()) {
+      Serial.println("Test 2 passé");
+      Serial.println("Nouveau Tag RFID :");
+      Serial.print("RFID Tag :");
 
-// put function definitions here:
-int myFunction(int x, int y) {
-  return x + y;
+      for (byte i = 0; i < mfrc522.uid.size; i++) {
+        Serial.print(mfrc522.uid.uidByte[i] < 0x10 ? " 0" : " ");
+        Serial.print(mfrc522.uid.uidByte[i], HEX);
+      }
+      Serial.println();
+
+      mfrc522.PICC_HaltA();
+      mfrc522.PCD_StopCrypto1();
+      delay(300);
+    }
+  }
+  delay(1000);
 }
