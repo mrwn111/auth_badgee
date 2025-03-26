@@ -31,6 +31,8 @@ void loop() {
   if (mfrc522.PICC_IsNewCardPresent()) {
     Serial.println("Test 1 passé");
     if (mfrc522.PICC_ReadCardSerial()) {
+      IPAddress myIP = WiFi.localIP();
+      Serial.println(myIP);
       Serial.println("Test 2 passé");
       Serial.println("Nouveau Tag RFID :");
       Serial.print("RFID Tag (Decimal):");
