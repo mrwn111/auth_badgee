@@ -20,13 +20,11 @@ MFRC522 mfrc522(SS_PIN, RST_PIN);
 const char *ssid = "RouteurCadeau";
 const char *motDePasseWifi = "CadeauRouteur";
 
-unsigned long previousMillis = 0; // Store the last time the text was displayed
-const long interval = 5000;       // 5 seconds interval (5000 milliseconds)
-bool badgeDisplayed = false;      // Flag to track if the badge text was displayed
-
-unsigned long loadingMillis = 0;  // Store the last time the "En attente" message was updated
-int loadingState = 0;             // Used to cycle through "En attente", "En attente.", "En attente..", "En attente..."
-
+unsigned long previousMillis = 0; 
+const long interval = 5000;      
+bool badgeDisplayed = false;    
+unsigned long loadingMillis = 0;  
+int loadingState = 0;            
 void setup()
 {
   delay(1000);
@@ -37,7 +35,7 @@ void setup()
   while (WiFi.status() != WL_CONNECTED)
   {
     delay(500);
-    Serial.write('.');  // Show dots while waiting for connection
+    Serial.write('.'); 
   }
   Serial.println("\nWiFi connecté");
 
@@ -57,7 +55,6 @@ void setup()
   display.setTextSize(1);
   display.setTextColor(SSD1306_WHITE);
 
-  // Display initial "Hello World"
   String message = "Hello World";
   int textWidth = message.length() * 6;
   int cursorX = (SCREEN_WIDTH - textWidth) / 2;
@@ -70,22 +67,19 @@ void loop()
 {
   WiFiClient client;
 
-  unsigned long currentMillis = millis(); // Get current time
+  unsigned long currentMillis = millis(); 
 
   if (mfrc522.PICC_IsNewCardPresent())
   {
     if (mfrc522.PICC_ReadCardSerial())
     {
-      // Clear the display initially
       display.clearDisplay();
 
-      // Display "Le badge est :"
       display.setCursor(0, 0); 
       display.setTextSize(1);
       display.println("Le badge est :");
       display.display();
 
-      // Display the UID numbers and print to serial in decimal format
       int cursorX = 10; 
       int cursorY = 30; 
 
@@ -99,45 +93,36 @@ void loop()
 
         cursorX += 25;
 
-        // Serial print each byte in decimal
         Serial.print(mfrc522.uid.uidByte[i], DEC);
         Serial.print(" ");
       }
-      Serial.println();  // Newline after UID print to serial
+      Serial.println(); 
 
       display.display();
       
-      // Set the flag to indicate the badge has been displayed
       badgeDisplayed = true;
-      previousMillis = currentMillis; // Store the current time to start the 5-second countdown
+      previousMillis = currentMillis;
     }
   }
 
-  // If 5 seconds have passed since displaying the badge, clear the display
   if (badgeDisplayed && (currentMillis - previousMillis >= interval))
   {
-    // Clear the display (clear the badge and UID)
     display.clearDisplay();
     display.display();
 
-    // Reset flag so the display doesn't keep clearing
     badgeDisplayed = false;
   }
 
-  // If no badge text is displayed, show "Loading..." or "En attente"
   if (!badgeDisplayed)
   {
-    // Update the "En attente" message every 500 milliseconds
     if (currentMillis - loadingMillis >= 500)
     {
-      loadingMillis = currentMillis;  // Update the last time the message was updated
+      loadingMillis = currentMillis;
 
-      // Clear the display and show the "En attente" message
       display.clearDisplay();
       display.setTextSize(1);
-      display.setCursor(30, SCREEN_HEIGHT / 2);  // Center the "En attente" text vertically
+      display.setCursor(30, SCREEN_HEIGHT / 2); 
 
-      // Cycle through "En attente", "En attente.", "En attente..", "En attente..."
       if (loadingState == 0)
       {
         display.println("En attente");
@@ -166,10 +151,9 @@ void loop()
 
       display.display();
 
-      // Update the loading state for the next cycle
-      loadingState = (loadingState + 1) % 6;  // Cycle between 0, 1, 2, 3
+      loadingState = (loadingState + 1) % 6; 
     }
   }
 
-  delay(100); // Reduce the delay for smoother operation
+  delay(100); 
 }
