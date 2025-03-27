@@ -8,8 +8,8 @@
 
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
-#define HOST_NAME "http://10.1.42.201:8000/"
-#define HOST_PORT 8000
+//#define HOST_NAME "http://10.1.42.201:8000/"
+//#define HOST_PORT 80
 
 #define RST_PIN 5
 #define SS_PIN 21
@@ -89,7 +89,7 @@ void setup()
 void loop()
 {
   WiFiClient client;
-  client.connect(HOST_NAME, HOST_PORT);
+  //client.connect(HOST_NAME, HOST_PORT);
 
   unsigned long currentMillis = millis(); // Get current time
 
