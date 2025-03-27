@@ -11,6 +11,7 @@
 
 #define RST_PIN 5
 #define SS_PIN 21
+#define Led_v 4
 
 #define OLED_RESET -1
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
@@ -20,14 +21,27 @@ MFRC522 mfrc522(SS_PIN, RST_PIN);
 const char *ssid = "RouteurCadeau";
 const char *motDePasseWifi = "CadeauRouteur";
 
-unsigned long previousMillis = 0; 
-const long interval = 5000;      
-bool badgeDisplayed = false;    
-unsigned long loadingMillis = 0;  
-int loadingState = 0;            
+// UIDs prédéfinis (en décimal sous forme de chaînes)
+const String admin = "516457153";  // UID admin (en décimal)
+const String user = "3614322998";  // UID user (en décimal)
+const String doubleCheckUID = "1312364817";  // UID pour la double vérification
+
+unsigned long previousMillis = 0;
+const long interval = 5000;
+bool badgeDisplayed = false;
+unsigned long loadingMillis = 0;
+int loadingState = 0;
+bool waitingForSecondBadge = false;
+unsigned long secondBadgeMillis = 0;
+String firstBadgeUID = "";  // Stocke le premier UID (badge initial)
+bool isProcessing = false;  // Variable de contrôle pour empêcher la relecture du badge pendant le processus
+
 void setup()
 {
   delay(1000);
+  pinMode(Led_v, OUTPUT);
+  digitalWrite(Led_v, LOW);
+
   Serial.begin(115200);
   Serial.println("Connexion au réseau WiFi en cours");
   WiFi.begin(ssid, motDePasseWifi);
@@ -35,7 +49,7 @@ void setup()
   while (WiFi.status() != WL_CONNECTED)
   {
     delay(500);
-    Serial.write('.'); 
+    Serial.write('.');
   }
   Serial.println("\nWiFi connecté");
 
@@ -67,52 +81,138 @@ void loop()
 {
   WiFiClient client;
 
-  unsigned long currentMillis = millis(); 
+  unsigned long currentMillis = millis();
 
-  if (mfrc522.PICC_IsNewCardPresent())
+  // Si une carte est présente et nous ne sommes pas en train de traiter une autre vérification
+  if (mfrc522.PICC_IsNewCardPresent() && !isProcessing)
   {
     if (mfrc522.PICC_ReadCardSerial())
     {
       display.clearDisplay();
-
-      display.setCursor(0, 0); 
+      display.setCursor(0, 0);
       display.setTextSize(1);
       display.println("Le badge est :");
       display.display();
 
-      int cursorX = 10; 
-      int cursorY = 30; 
+      int cursorX = 10;
+      int cursorY = 30;
 
-      Serial.print("UID du badge : ");
+      // Convertir l'UID en une chaîne décimale
+      String uidString = "";
       for (byte i = 0; i < mfrc522.uid.size; i++)
       {
-        String message = String(mfrc522.uid.uidByte[i], DEC);
-
-        display.setCursor(cursorX, cursorY);
-        display.println(message);
-
-        cursorX += 25;
-
-        Serial.print(mfrc522.uid.uidByte[i], DEC);
-        Serial.print(" ");
+        uidString += String(mfrc522.uid.uidByte[i], DEC);
       }
-      Serial.println(); 
 
-      display.display();
-      
-      badgeDisplayed = true;
-      previousMillis = currentMillis;
+      // Afficher l'UID en décimal sur le terminal
+      Serial.print("UID du badge : ");
+      Serial.println(uidString);
+
+      // Si le badge est le badge de double vérification
+      if (uidString == doubleCheckUID)
+      {
+        // Afficher "En attente de la 2e vérification" et attendre le second badge
+        display.clearDisplay();
+        display.setCursor(cursorX, cursorY);
+        display.setTextSize(1);
+        display.println("En attente de 2e verif");
+        display.display();
+
+        // Prépare le système pour attendre un second badge
+        firstBadgeUID = uidString;  // Enregistrer le premier badge
+        waitingForSecondBadge = true;
+        secondBadgeMillis = currentMillis;
+        digitalWrite(Led_v, LOW);  // Éteindre la LED en attendant le deuxième badge
+        isProcessing = true;  // Début du processus de vérification, bloque les nouvelles cartes
+      }
+      // Si le badge est un admin ou user
+      else if (uidString == admin || uidString == user)
+      {
+        // Les badges admin et user sont acceptés directement sans double vérification
+        display.clearDisplay();
+        display.setCursor(cursorX, cursorY);
+        display.setTextSize(1);
+        display.println(uidString == admin ? "Admin" : "User");
+        display.display();
+        digitalWrite(Led_v, HIGH);  // Allumer la LED pour un badge valide
+        badgeDisplayed = true;
+        previousMillis = currentMillis;
+        isProcessing = true;  // Bloquer les nouvelles cartes jusqu'à ce que le processus soit terminé
+      }
+      else
+      {
+        // Badge inconnu
+        display.clearDisplay();
+        display.setCursor(cursorX, cursorY);
+        display.setTextSize(1);
+        display.println("Inconnu");
+        display.display();
+        digitalWrite(Led_v, LOW);
+      }
     }
   }
 
+  // Vérification du temps d'attente pour le deuxième badge (5 secondes)
+  if (waitingForSecondBadge && (currentMillis - secondBadgeMillis >= 5000))
+  {
+    display.clearDisplay();
+    display.setCursor(10, 30);
+    display.setTextSize(1);
+    display.println("Acces Refuse !");
+    display.display();
+    waitingForSecondBadge = false; // Réinitialisation
+    digitalWrite(Led_v, LOW); // Éteindre la LED si l'accès est refusé
+    isProcessing = false;  // Réinitialiser le processus pour permettre la lecture d'autres cartes
+  }
+
+  // Si on attend un second badge (après le badge "doubleCheckUID")
+  if (waitingForSecondBadge && mfrc522.PICC_IsNewCardPresent())
+  {
+    if (mfrc522.PICC_ReadCardSerial())
+    {
+      String secondUidString = "";
+      for (byte i = 0; i < mfrc522.uid.size; i++)
+      {
+        secondUidString += String(mfrc522.uid.uidByte[i], DEC);
+      }
+
+      // Vérification du second badge (admin ou user)
+      if (secondUidString == admin || secondUidString == user)
+      {
+        display.clearDisplay();
+        display.setCursor(10, 30);
+        display.setTextSize(1);
+        display.println("Acces Autorise");
+        display.display();
+        digitalWrite(Led_v, HIGH);  // LED allumée pour accès autorisé
+        badgeDisplayed = true;
+        previousMillis = currentMillis;
+      }
+      else
+      {
+        display.clearDisplay();
+        display.setCursor(10, 30);
+        display.setTextSize(1);
+        display.println("Acces Refuse");
+        display.display();
+        digitalWrite(Led_v, LOW);  // LED éteinte pour accès refusé
+      }
+
+      waitingForSecondBadge = false; // Réinitialisation de l'attente du second badge
+      isProcessing = false;  // Réinitialiser le processus pour permettre la lecture d'autres cartes
+    }
+  }
+
+  // Si le badge est affiché pendant plus de 5 secondes, on réinitialise l'écran
   if (badgeDisplayed && (currentMillis - previousMillis >= interval))
   {
     display.clearDisplay();
     display.display();
-
     badgeDisplayed = false;
+    digitalWrite(Led_v, LOW);
   }
 
+  // Animation "En attente" sur l'écran si aucun badge n'est détecté
   if (!badgeDisplayed)
   {
     if (currentMillis - loadingMillis >= 500)
@@ -121,7 +221,7 @@ void loop()
 
       display.clearDisplay();
       display.setTextSize(1);
-      display.setCursor(30, SCREEN_HEIGHT / 2); 
+      display.setCursor(30, SCREEN_HEIGHT / 2);
 
       if (loadingState == 0)
       {
@@ -148,12 +248,11 @@ void loop()
         display.println("En attente.");
       }
 
-
       display.display();
 
-      loadingState = (loadingState + 1) % 6; 
+      loadingState = (loadingState + 1) % 6;
     }
   }
 
-  delay(100); 
+  delay(100);
 }
