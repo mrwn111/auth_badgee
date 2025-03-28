@@ -5,13 +5,18 @@
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h> 
 
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
 
 #define RST_PIN 5
 #define SS_PIN 21
-#define BUTTON_PIN 7  // Bouton sur la broche D7
+#define BUTTON_PIN 20
+
+#define LED_VERTE_PIN 3  
+#define LED_ROUGE_PIN 4  
 
 #define OLED_RESET -1
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
@@ -21,19 +26,19 @@ MFRC522 mfrc522(SS_PIN, RST_PIN);
 const char *ssid = "RouteurCadeau";
 const char *motDePasseWifi = "CadeauRouteur";
 
-const String userUID = "3614322998";
-const String adminUID = "516457153";
+const String apiURL = "https://guardia-api.iadjedj.ovh/unsecure/";
 
 unsigned long previousMillis = 0;
 const long interval = 5000;
 bool badgeDisplayed = false;
 
+unsigned long ledOffMillis = 0; 
+const long ledDuration = 3000; 
+
 void setup()
 {
-  pinMode(BUTTON_PIN, INPUT_PULLUP); // Configuration du bouton
-  
+  delay(1000);
   Serial.begin(115200);
-  Serial.println("Connexion au réseau WiFi en cours");
   WiFi.begin(ssid, motDePasseWifi);
   WiFi.softAP(ssid, motDePasseWifi);
   while (WiFi.status() != WL_CONNECTED)
@@ -45,76 +50,143 @@ void setup()
 
   SPI.begin();
   mfrc522.PCD_Init();
-  
+
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  pinMode(LED_VERTE_PIN, OUTPUT);
+  pinMode(LED_ROUGE_PIN, OUTPUT);  
+
   if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C))
   {
     Serial.println(F("SSD1306 allocation failed"));
-    for (;;);
+    for (;;)
+      ;
   }
 
   display.clearDisplay();
   display.setTextSize(1);
   display.setTextColor(SSD1306_WHITE);
-  display.setCursor(30, 20);
-  display.println("Hello World");
-  display.display();
 }
 
 void loop()
 {
   unsigned long currentMillis = millis();
-  int buttonState = digitalRead(BUTTON_PIN);
 
-  if (mfrc522.PICC_IsNewCardPresent() && mfrc522.PICC_ReadCardSerial())
+  if (digitalRead(BUTTON_PIN) == LOW)
+  {
+    if (mfrc522.PICC_IsNewCardPresent())
+    {
+      if (mfrc522.PICC_ReadCardSerial())
+      {
+        display.clearDisplay();
+
+        String badgeUID = "";
+        for (byte i = 0; i < mfrc522.uid.size; i++)
+        {
+          badgeUID += String(mfrc522.uid.uidByte[i], DEC);
+        }
+
+        display.setCursor(0, 0);
+        display.setTextSize(1);
+        display.println("Verification...");
+        display.display();
+
+        Serial.println(badgeUID); 
+
+        HTTPClient http;
+        
+        String checkBadgeURL = apiURL + "check_badge?badge_id=" + badgeUID;
+        http.begin(checkBadgeURL);
+        http.addHeader("Content-Type", "application/json");
+
+        int httpResponseCode = http.GET();
+
+        if (httpResponseCode > 0)
+        {
+          String checkResponse = http.getString();
+          Serial.println("Reponse de la vérification du badge: " + checkResponse);
+
+          DynamicJsonDocument doc(200); 
+          DeserializationError error = deserializeJson(doc, checkResponse);
+
+          if (error)
+          {
+            Serial.println("Erreur lors de l'analyse de la réponse JSON");
+            return;
+          }
+
+          const char* level = doc["level"];
+          
+          display.clearDisplay();
+          display.setCursor(0, 20);
+          display.setTextSize(1);
+
+          if (String(level) == "admin")
+          {
+            display.println("Role : Admin");
+            Serial.println("Badge admin!");
+            digitalWrite(LED_VERTE_PIN, HIGH); 
+            digitalWrite(LED_ROUGE_PIN, LOW);   
+            ledOffMillis = millis() + ledDuration; 
+          }
+          else if (String(level) == "user")
+          {
+            display.println("Role : User");
+            Serial.println("Badge user!");
+            digitalWrite(LED_VERTE_PIN, HIGH); 
+            digitalWrite(LED_ROUGE_PIN, LOW);   
+            ledOffMillis = millis() + ledDuration; 
+          }
+          else
+          {
+            display.println("Role inconnu");
+            Serial.println("Role inconnu!");
+            digitalWrite(LED_VERTE_PIN, LOW);   
+            digitalWrite(LED_ROUGE_PIN, HIGH); 
+            ledOffMillis = millis() + ledDuration;  
+          }
+          display.display();
+        }
+        else
+        {
+          Serial.println("Erreur lors de la vérification du badge");
+          display.clearDisplay();
+          display.setCursor(0, 20);
+          display.println("Erreur de vérification");
+          display.display();
+          digitalWrite(LED_VERTE_PIN, LOW);  
+          digitalWrite(LED_ROUGE_PIN, HIGH);  
+          ledOffMillis = millis() + ledDuration; 
+        }
+
+        http.end();
+
+        badgeDisplayed = true;
+        previousMillis = currentMillis;
+      }
+    }
+
+    if (badgeDisplayed && (currentMillis - previousMillis >= interval))
+    {
+      display.clearDisplay();
+      display.display();
+      badgeDisplayed = false;
+    }
+  }
+  else
   {
     display.clearDisplay();
-    display.setCursor(0, 0);
     display.setTextSize(1);
-    display.println("Le badge est :");
+    display.setCursor(0, SCREEN_HEIGHT / 2);
+    display.println("Appuyez sur le bouton");
+    display.println("pour badger");
     display.display();
-
-    String badgeUID = "";
-    for (byte i = 0; i < mfrc522.uid.size; i++)
-    {
-      badgeUID += String(mfrc522.uid.uidByte[i], DEC);
-    }
-
-    if (buttonState == LOW) // Vérifier si le bouton est appuyé
-    {
-      if (badgeUID == userUID)
-      {
-        display.setCursor(0, 20);
-        display.println("User");
-        Serial.println("UID reconnu : User");
-      }
-      else if (badgeUID == adminUID)
-      {
-        display.setCursor(0, 20);
-        display.println("Admin");
-        Serial.println("UID reconnu : Admin");
-      }
-      else
-      {
-        display.setCursor(0, 20);
-        display.println("Inconnu");
-        Serial.println("UID inconnu");
-      }
-    }
-    else
-    {
-      display.setCursor(0, 20);
-      display.println("Appuyez sur le bouton!");
-      Serial.println("Badge détecté mais bouton non pressé");
-    }
-    display.display();
-    badgeDisplayed = true;
-    previousMillis = currentMillis;
   }
 
-  if (badgeDisplayed && (currentMillis - previousMillis >= interval))
+  if (millis() > ledOffMillis)
   {
-    display.clearDisplay();
-    display.display();
-    badgeDisplayed = false;
+    digitalWrite(LED_VERTE_PIN, LOW);  
+    digitalWrite(LED_ROUGE_PIN, LOW); 
   }
+
+  delay(100);
 }
