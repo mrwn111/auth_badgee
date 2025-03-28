@@ -20,11 +20,17 @@ MFRC522 mfrc522(SS_PIN, RST_PIN);
 const char *ssid = "RouteurCadeau";
 const char *motDePasseWifi = "CadeauRouteur";
 
-unsigned long previousMillis = 0; 
-const long interval = 5000;      
-bool badgeDisplayed = false;    
-unsigned long loadingMillis = 0;  
-int loadingState = 0;            
+// UID des utilisateurs connus
+const String userUID = "3614322998";  // UID de l'utilisateur
+const String adminUID = "516457153";  // UID de l'administrateur
+
+unsigned long previousMillis = 0; // Store the last time the text was displayed
+const long interval = 5000;       // 5 seconds interval (5000 milliseconds)
+bool badgeDisplayed = false;      // Flag to track if the badge text was displayed
+
+unsigned long loadingMillis = 0;  // Store the last time the "En attente" message was updated
+int loadingState = 0;             // Used to cycle through "En attente", "En attente.", "En attente..", "En attente..."
+
 void setup()
 {
   delay(1000);
@@ -35,7 +41,7 @@ void setup()
   while (WiFi.status() != WL_CONNECTED)
   {
     delay(500);
-    Serial.write('.'); 
+    Serial.write('.');  // Show dots while waiting for connection
   }
   Serial.println("\nWiFi connecté");
 
@@ -55,6 +61,7 @@ void setup()
   display.setTextSize(1);
   display.setTextColor(SSD1306_WHITE);
 
+  // Display initial "Hello World"
   String message = "Hello World";
   int textWidth = message.length() * 6;
   int cursorX = (SCREEN_WIDTH - textWidth) / 2;
@@ -67,62 +74,81 @@ void loop()
 {
   WiFiClient client;
 
-  unsigned long currentMillis = millis(); 
+  unsigned long currentMillis = millis(); // Get current time
 
   if (mfrc522.PICC_IsNewCardPresent())
   {
     if (mfrc522.PICC_ReadCardSerial())
     {
+      // Clear the display initially
       display.clearDisplay();
 
+      // Display "Le badge est :"
       display.setCursor(0, 0); 
       display.setTextSize(1);
       display.println("Le badge est :");
       display.display();
 
-      int cursorX = 10; 
-      int cursorY = 30; 
-
-      Serial.print("UID du badge : ");
+      // Convert UID to a string for easy comparison
+      String badgeUID = "";
       for (byte i = 0; i < mfrc522.uid.size; i++)
       {
-        String message = String(mfrc522.uid.uidByte[i], DEC);
-
-        display.setCursor(cursorX, cursorY);
-        display.println(message);
-
-        cursorX += 25;
-
-        Serial.print(mfrc522.uid.uidByte[i], DEC);
-        Serial.print(" ");
+        badgeUID += String(mfrc522.uid.uidByte[i], DEC);
       }
-      Serial.println(); 
+
+      // Compare the UID with known ones
+      if (badgeUID == userUID)
+      {
+        display.setCursor(0, 20);
+        display.println("User");
+        Serial.println("UID reconnu : User");
+      }
+      else if (badgeUID == adminUID)
+      {
+        display.setCursor(0, 20);
+        display.println("Admin");
+        Serial.println("UID reconnu : Admin");
+      }
+      else
+      {
+        display.setCursor(0, 20);
+        display.println("Inconnu");
+        Serial.println("UID inconnu");
+      }
 
       display.display();
       
+      // Set the flag to indicate the badge has been displayed
       badgeDisplayed = true;
-      previousMillis = currentMillis;
+      previousMillis = currentMillis; // Store the current time to start the 5-second countdown
     }
   }
 
+  // If 5 seconds have passed since displaying the badge, clear the display
   if (badgeDisplayed && (currentMillis - previousMillis >= interval))
   {
+    // Clear the display (clear the badge and UID)
     display.clearDisplay();
     display.display();
 
+    // Reset flag so the display doesn't keep clearing
     badgeDisplayed = false;
   }
 
+  // If no badge text is displayed, show "Loading..." or "En attente"
   if (!badgeDisplayed)
   {
+    // Update the "En attente" message every 500 milliseconds
     if (currentMillis - loadingMillis >= 500)
     {
-      loadingMillis = currentMillis;
+      loadingMillis = currentMillis;  // Update the last time the message was updated
 
+      // Clear the display and show the "En attente" message
       display.clearDisplay();
       display.setTextSize(1);
-      display.setCursor(30, SCREEN_HEIGHT / 2); 
+      display.setCursor(30, SCREEN_HEIGHT / 2);  // Center the "En attente" text vertically
 
+      // Cycle through "En attente", "En attente.", "En attente..", "En attente..."
       if (loadingState == 0)
       {
         display.println("En attente");
@@ -148,12 +174,12 @@ void loop()
         display.println("En attente.");
       }
 
-
       display.display();
 
-      loadingState = (loadingState + 1) % 6; 
+      // Update the loading state for the next cycle
+      loadingState = (loadingState + 1) % 6;  // Cycle between 0, 1, 2, 3
     }
   }
 
-  delay(100); 
+  delay(100); // Reduce the delay for smoother operation
 }
