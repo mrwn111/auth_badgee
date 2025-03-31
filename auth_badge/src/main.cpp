@@ -14,6 +14,7 @@
 #define RST_PIN 5
 #define SS_PIN 21
 #define BUTTON_PIN 20
+#define NEW_BADGE_BUTTON_PIN 2 
 
 #define LED_VERTE_PIN 3  
 #define LED_ROUGE_PIN 4  
@@ -53,6 +54,7 @@ void setup()
   mfrc522.PCD_Init();
 
   pinMode(BUTTON_PIN, INPUT_PULLUP);
+  pinMode(NEW_BADGE_BUTTON_PIN, INPUT_PULLUP); 
   pinMode(LED_VERTE_PIN, OUTPUT);
   pinMode(LED_ROUGE_PIN, OUTPUT);  
 
@@ -125,9 +127,9 @@ void loop()
 
           if (exists)
           {
-            display.println("Badge trouve!");
-            display.println("Role: " + role);
-            Serial.println("Badge trouve!");
+            display.println("Badge trouvé!");
+            display.println("Rôle: " + role);
+            Serial.println("Badge trouvé!");
 
             if (role == "admin")
             {
@@ -180,6 +182,60 @@ void loop()
       display.display();
       badgeDisplayed = false;
     }
+  }
+  else if (digitalRead(NEW_BADGE_BUTTON_PIN) == LOW) 
+  {
+    Serial.println("Entrez l'UID du nouveau badge (valeurs séparées par des espaces) : ");
+    while (Serial.available() == 0);
+    String badgeUID = Serial.readStringUntil('\n');
+    badgeUID.trim();
+
+    Serial.println("Entrez le mot de passe du nouveau badge : ");
+    while (Serial.available() == 0); 
+    String password = Serial.readStringUntil('\n');
+    password.trim();
+
+    Serial.println("Entrez le rôle du nouveau badge (admin/user) : ");
+    while (Serial.available() == 0); 
+    String role = Serial.readStringUntil('\n');
+    role.trim();
+
+  
+    HTTPClient http;
+    String addBadgeURL = "http://10.1.42.201:8000/users"; 
+    http.begin(addBadgeURL);
+    http.addHeader("Content-Type", "application/json");
+    http.addHeader("X-API-Key", token);
+
+    DynamicJsonDocument doc(200);
+    doc["badge_id"] = badgeUID;
+    doc["password"] = password;
+    doc["role"] = role;
+    String jsonPayload;
+    serializeJson(doc, jsonPayload);
+
+    int httpResponseCode = http.POST(jsonPayload); 
+
+    if (httpResponseCode > 0)
+    {
+      String response = http.getString();
+      Serial.println("Réponse de l'API : " + response);
+      display.clearDisplay();
+      display.setCursor(0, 20);
+      display.println("Badge créé!");
+      display.display();
+    }
+    else
+    {
+      Serial.println("Erreur lors de la création du badge");
+      display.clearDisplay();
+      display.setCursor(0, 20);
+      display.println("Erreur de creation");
+      display.display();
+    }
+
+    http.end();
+    delay(2000);
   }
   else
   {
