@@ -30,8 +30,7 @@ const char *token = "1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p7q8r9s0t";
 
 const String apiURL = "http://10.1.42.201:8000/users/";
 
-// UID du supresseur (doit être en dur dans le code)
-String suppressorUID = "418416698";  // Exemple d'UID du supresseur
+String suppressorUID = "418416698"; 
 
 unsigned long previousMillis = 0;
 const long interval = 5000;
@@ -44,14 +43,12 @@ void sendDeleteRequest(String badgeID)
 {
   HTTPClient http;
 
-  // URL de la requête DELETE
-  String deleteBadgeURL = apiURL + badgeID;  // URL de suppression avec le badge ID
+  String deleteBadgeURL = apiURL + badgeID; 
 
-  http.begin(deleteBadgeURL);  // Démarrer la requête
-  http.addHeader("X-API-Key", token);  // Ajouter l'API Key
+  http.begin(deleteBadgeURL);  
+  http.addHeader("X-API-Key", token); 
 
-  // Envoyer la requête DELETE
-  int httpResponseCode = http.sendRequest("DELETE");  // Utiliser "DELETE" pour envoyer la requête
+  int httpResponseCode = http.sendRequest("DELETE"); 
 
   if (httpResponseCode > 0)
   {
@@ -71,7 +68,7 @@ void sendDeleteRequest(String badgeID)
     display.display();
   }
 
-  http.end();  // Fermer la requête
+  http.end(); 
 }
 
 void setup()
@@ -132,7 +129,6 @@ void loop()
 
         Serial.println(badgeUID);
 
-        // Vérifiez si c'est le badge du supresseur
         if (badgeUID == suppressorUID)
         {
           Serial.println("Badge du supresseur détecté. Aucune action effectuée.");
@@ -140,10 +136,9 @@ void loop()
           display.setCursor(0, 20);
           display.println("Badge supresseur!");
           display.display();
-          return; // Ne rien faire si c'est le badge du supresseur
+          return; 
         }
 
-        // Si ce n'est pas le badge du supresseur, on continue le processus de vérification
         HTTPClient http;
 
         String checkBadgeURL = apiURL + "check/" + badgeUID;
