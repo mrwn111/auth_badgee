@@ -125,9 +125,9 @@ void loop()
 
           if (exists)
           {
-            display.println("Badge trouvé!");
-            display.println("Rôle: " + role);
-            Serial.println("Badge trouvé!");
+            display.println("Badge trouve!");
+            display.println("Role: " + role);
+            Serial.println("Badge trouve!");
 
             if (role == "admin")
             {
