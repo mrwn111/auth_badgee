@@ -25,8 +25,9 @@ MFRC522 mfrc522(SS_PIN, RST_PIN);
 
 const char *ssid = "RouteurCadeau";
 const char *motDePasseWifi = "CadeauRouteur";
+const char *token = "1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p7q8r9s0t"; 
 
-const String apiURL = "https://guardia-api.iadjedj.ovh/unsecure/";
+const String apiURL = "http://10.1.42.201:8000/users/check/";
 
 unsigned long previousMillis = 0;
 const long interval = 5000;
@@ -94,16 +95,17 @@ void loop()
 
         HTTPClient http;
         
-        String checkBadgeURL = apiURL + "check_badge?badge_id=" + badgeUID;
+        String checkBadgeURL = apiURL + badgeUID;
         http.begin(checkBadgeURL);
         http.addHeader("Content-Type", "application/json");
+        http.addHeader("X-API-Key", token);
 
         int httpResponseCode = http.GET();
 
         if (httpResponseCode > 0)
         {
           String checkResponse = http.getString();
-          Serial.println("Reponse de la vérification du badge: " + checkResponse);
+          Serial.println("Réponse de la vérification du badge: " + checkResponse);
 
           DynamicJsonDocument doc(200); 
           DeserializationError error = deserializeJson(doc, checkResponse);
@@ -114,36 +116,43 @@ void loop()
             return;
           }
 
-          const char* level = doc["level"];
-          
+          bool exists = doc["exists"];
+          String role = doc["user_info"]["role"];
+
           display.clearDisplay();
           display.setCursor(0, 20);
           display.setTextSize(1);
 
-          if (String(level) == "admin")
+          if (exists)
           {
-            display.println("Role : Admin");
-            Serial.println("Badge admin!");
-            digitalWrite(LED_VERTE_PIN, HIGH); 
-            digitalWrite(LED_ROUGE_PIN, LOW);   
-            ledOffMillis = millis() + ledDuration; 
-          }
-          else if (String(level) == "user")
-          {
-            display.println("Role : User");
-            Serial.println("Badge user!");
-            digitalWrite(LED_VERTE_PIN, HIGH); 
-            digitalWrite(LED_ROUGE_PIN, LOW);   
-            ledOffMillis = millis() + ledDuration; 
+            display.println("Badge trouvé!");
+            display.println("Rôle: " + role);
+            Serial.println("Badge trouvé!");
+
+            if (role == "admin")
+            {
+              digitalWrite(LED_VERTE_PIN, HIGH); 
+              digitalWrite(LED_ROUGE_PIN, LOW);   
+            }
+            else if (role == "user")
+            {
+              digitalWrite(LED_VERTE_PIN, HIGH); 
+              digitalWrite(LED_ROUGE_PIN, LOW);   
+            }
+            else
+            {
+              digitalWrite(LED_VERTE_PIN, LOW);   
+              digitalWrite(LED_ROUGE_PIN, HIGH); 
+            }
           }
           else
           {
-            display.println("Role inconnu");
-            Serial.println("Role inconnu!");
+            display.println("Badge introuvable");
+            Serial.println("Badge introuvable");
             digitalWrite(LED_VERTE_PIN, LOW);   
-            digitalWrite(LED_ROUGE_PIN, HIGH); 
-            ledOffMillis = millis() + ledDuration;  
+            digitalWrite(LED_ROUGE_PIN, HIGH);  
           }
+          ledOffMillis = millis() + ledDuration; 
           display.display();
         }
         else
